@@ -394,7 +394,7 @@ class SaleController extends Controller
             if(!isset($data['reference_no']))
                 $data['reference_no'] = 'posr-' . date("Ymd") . '-'. date("his");
 
-            $balance = $data['grand_total'] - $data['paid_amount'];
+            $balance = ($data['grand_total'] - $data['order_discount'] - $data['shipping_cost']) - $data['paid_amount'];
             if($balance > 0 || $balance < 0)
                 $data['payment_status'] = 2;
             else
@@ -778,6 +778,7 @@ class SaleController extends Controller
                 $lims_product_shipping_data->sale_id = $lims_sale_data->id;
                 $lims_product_shipping_data->agency_id = $data['shipping_agency'][$key];
                 $lims_product_shipping_data->shipping_type = $data['shipping_type'][$key];
+                $lims_product_shipping_data->shipping_vehicle_no = $data['shipping_vehicle_no'][$key];
                 $lims_product_shipping_data->shipping_cost = $data['shipping_per_cost'][$key];
                 $lims_product_shipping_data->payment_status = 0;
 
@@ -1673,7 +1674,8 @@ class SaleController extends Controller
             $lims_sale_data = Sale::find($id);
             $lims_product_sale_data = Product_Sale::where('sale_id', $id)->get();
             $lims_agency_list = Agency::where('is_active', true)->get();
-            return view('backend.sale.edit',compact('lims_customer_list', 'lims_warehouse_list', 'lims_biller_list', 'lims_tax_list', 'lims_sale_data','lims_product_sale_data','lims_agency_list'));
+            $lims_shipping_data = Shipping::with('agency')->where('sale_id',$id)->get();
+            return view('backend.sale.edit',compact('lims_customer_list', 'lims_warehouse_list', 'lims_biller_list', 'lims_tax_list', 'lims_sale_data','lims_product_sale_data','lims_agency_list','lims_shipping_data'));
         }
         else
             return redirect()->back()->with('not_permitted', 'Sorry! You are not allowed to access this module');
@@ -1700,13 +1702,15 @@ class SaleController extends Controller
             $document->move('public/sale/documents', $documentName);
             $data['document'] = $documentName;
         }
-        $balance = $data['grand_total'] - $data['paid_amount'];
+        $balance = ($data['grand_total'] - $data['order_discount'] - $data['shipping_cost']) - $data['paid_amount'];
         if($balance < 0 || $balance > 0)
             $data['payment_status'] = 2;
         else
             $data['payment_status'] = 4;
         $lims_sale_data = Sale::find($id);
         $lims_product_sale_data = Product_Sale::where('sale_id', $id)->get();
+        $lims_old_ship_data = Shipping::where('sale_id', $id)->get();
+
         $data['created_at'] = date("Y-m-d", strtotime(str_replace("/", "-", $data['created_at'])));
         $product_id = $data['product_id'];
         $imei_number = $data['imei_number'];
@@ -1961,6 +1965,33 @@ class SaleController extends Controller
             else
                 Product_Sale::create($product_sale);
         }
+
+        //SHIPPING DATA UPDATE
+
+        foreach ($lims_old_ship_data as $shipId){
+            $shipId->delete();
+        }
+
+        $data['user_id'] = Auth::id();
+        $data['reference_no'] = 'sr-' . date("Ymd") . '-'. date("his");
+
+        if ($data['shippingCheck'] =='ship1') {
+            foreach ($data['shipping_agency'] as $key => $agency_name) {
+                $shipOld =
+                $lims_product_shipping_data = new Shipping;
+                $lims_product_shipping_data->reference_no = $data['reference_no'];
+                $lims_product_shipping_data->user_id = $data['user_id'];
+                $lims_product_shipping_data->sale_id = $id;
+                $lims_product_shipping_data->agency_id = $data['shipping_agency'][$key];
+                $lims_product_shipping_data->shipping_type = $data['shipping_type'][$key];
+                $lims_product_shipping_data->shipping_vehicle_no = $data['shipping_vehicle_no'][$key];
+                $lims_product_shipping_data->shipping_cost = $data['shipping_per_cost'][$key];
+                $lims_product_shipping_data->payment_status = 0;
+
+                $lims_product_shipping_data->save();
+            }
+        }
+
         $lims_sale_data->update($data);
         $lims_customer_data = Customer::find($data['customer_id']);
         $message = 'Sale updated successfully';

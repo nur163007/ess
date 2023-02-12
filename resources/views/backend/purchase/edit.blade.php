@@ -289,14 +289,20 @@
                                     </div>
                                 </div>
 
+                                <div class="col-md-12 mb-4 mt-4">
+                                    <button type="button" class="btn btn-info add-more-agency pull-right"><i class="dripicons-plus font-weight-bold" style="font-size: 15px;"></i></button>
+                                </div>
+
                                 <div id="agencyHide" class="row mt-4">
                                     @foreach ($lims_shipping_data as $key=> $shipData)
+                                     <div class="row col-md-12" id="row_{{$shipData->id}}">
 {{--                                        {{$shipData}}--}}
+                                        <input type="hidden" name="oldShipId[]" value="{{$shipData->id}}">
                                     <div class="col-md-3">
                                         <div class="form-group">
                                             <label><strong>{{trans('file.Agency')}} *</strong></label>
 {{--                                            <input type="hidden" name="shipping_agency_hidden" value="{{ $shipData->agency->id }}" />--}}
-                                            <select name="shipping_agency[]" class="selectpicker form-control shippingAgency" required>
+                                            <select name="shipping_agency[]" class="selectpicker form-control shippingAgency" id="oldAgency_{{$shipData->id}}" required>
                                                 <option value="{{$shipData->agency->id}}" selected>{{$shipData->agency->company_name}}</option>
                                                 @foreach($lims_agency_list as $agency)
                                                     <option value="{{$agency->id}}">{{$agency->company_name}}</option>
@@ -308,7 +314,7 @@
                                         <div class="form-group">
                                             <label><strong>{{trans('file.Shipping Type')}}</strong></label>
 {{--                                            <input type="hidden" name="shipping_type_hidden" value="{{ $shipData->shipping_type }}" />--}}
-                                            <select name="shipping_type[]" class="selectpicker form-control" data-live-search="true" title="Select Shipping type...">
+                                            <select name="shipping_type[]" class="selectpicker form-control" id="oldType_{{$shipData->id}}">
                                                 <option value="{{$shipData->shipping_type}}" selected>
                                                     @if($shipData->shipping_type ==1)
                                                         Truck
@@ -328,21 +334,21 @@
                                         <div class="form-group">
                                             <label><strong>{{trans('file.Vechicle Number')}}</strong></label>
 {{--                                            <input type="hidden" name="shipping_vehicle_no_hidden" value="{{$shipData->shipping_vehicle_no}}" />--}}
-                                            <input type="text" name="shipping_vehicle_no[]" class="form-control" value="{{$shipData->shipping_vehicle_no}}" step="any">
+                                            <input type="text" name="shipping_vehicle_no[]" class="form-control" value="{{$shipData->shipping_vehicle_no}}" id="oldVehicle_{{$shipData->id}}" step="any">
                                         </div>
                                     </div>
                                     <div class="col-md-2">
                                         <div class="form-group">
                                             <label><strong>{{trans('file.Shipping Cost')}}</strong></label>
 {{--                                            <input type="hidden" name="shipping_per_cost_hidden" value="{{$lims_purchase_data->shipping_vehicle_no}}" />--}}
-                                            <input type="text" name="shipping_per_cost[]" class="form-control getShippingCost" value="{{$shipData->shipping_cost}}" step="any">
+                                            <input type="text" name="shipping_per_cost[]" class="form-control getShippingCost" value="{{$shipData->shipping_cost}}" id="oldCost_{{$shipData->id}}" step="any">
                                         </div>
                                     </div>
-                                    @endforeach
                                     <div class="col-md-1">
-                                        <button type="button" class="btn btn-info add-more-agency" style="margin-top: 30px;"><i class="dripicons-plus font-weight-bold" style="font-size: 15px;"></i></button>
+                                        <button type="button" class="btn btn-danger remove-agency" style="margin-top: 30px;" onclick="deleteOldRow({{$shipData->id}})" id="oldremoveBtn_{{$shipData->id}}"><i class="dripicons-cross font-weight-bold" style="font-size: 15px;"></i></button>
                                     </div>
-
+                                    </div>
+                                    @endforeach
                                 </div>
 
                                 <div class="row">
@@ -1005,8 +1011,8 @@ $('#purchase-form').on('submit',function(e){
         var id = $('div#agencyHide').children().length+1;
 
         $('div#agencyHide').append(
-            $('<div>').attr({'class':'col-md-12 mt-3', 'id':'allAgencyRow'+id}).append(
-                $('<div>').attr({'class':'row'}).append(
+            $('<div>').attr({'class':'row col-md-12 mt-3', 'id':'allAgencyRow'+id}).append(
+                $('<div>').attr({'class':'row col-md-12'}).append(
                     $('<div>').attr('class','col-md-3').append(
                         //$('<select>').attr({'class':'form-control', 'data-plugin':'selectpicker', 'data-style':'btn-select', 'name':'ppPartName[]', 'id':'ppPartName_'+id.toString()})
                         '<select class="form-control" data-plugin="select2" name="shipping_agency[]" id="shipping_agency_'+id+'" data-live-search="true" required title="Select agency..."></select>'
@@ -1032,7 +1038,7 @@ $('#purchase-form').on('submit',function(e){
                         '<input type="text" name="shipping_per_cost[]" id="getShipCost_'+id+'" class="form-control getperShippingCost" onkeyup="getShipCost('+id+')" value="0.00" step="any">'
                     )
                 ).append(
-                    $('<div>').attr('class','col-md-1').append(
+                    $('<div>').attr('class','col-md-1 pl-5').append(
                         '<button type="button" class="btn btn-danger remove-agency" onclick="deleteRow('+id+');" id="removeBtn_'+id+'" ><i class="dripicons-cross text-white font-weight-bold" style="font-size:15px;"></i></button>'
                     )
                 )
@@ -1127,6 +1133,36 @@ $('#purchase-form').on('submit',function(e){
             // alert(total)
             $('input[name="shipping_cost"]').val(sum).change();
             $('#allAgencyRow'+removeNum).remove();
+        }
+    }
+
+    function deleteOldRow(removeid, e) {
+        if (removeid == 1) {
+            alertify.error("You have to keep at least 1 Row");
+            return false;
+        } else {
+            var total = parseFloat($('input[name="shipping_cost"]').val());
+            var sum = 0;
+
+            $('.getShippingCost').each(function (i) {
+                var val = $('#oldCost_'+removeid).val();
+                if (val != "") {
+
+                    sum = total - parseFloat(val);
+                }
+                else {
+                    sum = sum+ 0;
+                }
+
+            });
+            // alert(total)
+            $('input[name="shipping_cost"]').val(sum).change();
+            $('#row_'+removeid).remove();
+            $('#oldAgency_'+removeid).remove();
+            $('#oldType_'+removeid).remove();
+            $('#oldVehicle_'+removeid).remove();
+            $('#oldCost_'+removeid).remove();
+            $('#oldremoveBtn_'+removeid).remove();
         }
     }
 </script>

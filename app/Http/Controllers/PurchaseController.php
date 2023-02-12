@@ -541,6 +541,7 @@ class PurchaseController extends Controller
             $lims_product_shipping_data->purchase_id = $lims_purchase_data->id;
             $lims_product_shipping_data->agency_id = $data['shipping_agency'][$key];
             $lims_product_shipping_data->shipping_type = $data['shipping_type'][$key];
+            $lims_product_shipping_data->shipping_vehicle_no = $data['shipping_vehicle_no'][$key];
             $lims_product_shipping_data->shipping_cost = $data['shipping_per_cost'][$key];
             $lims_product_shipping_data->payment_status = 0;
 
@@ -742,6 +743,7 @@ class PurchaseController extends Controller
     public function update(Request $request, $id)
     {
         $data = $request->except('document');
+//        dd($data);
         $document = $request->document;
         $this->validate($request, [
             'lc_no' => [
@@ -768,7 +770,8 @@ class PurchaseController extends Controller
             $data['document'] = $documentName;
         }
         //return dd($data);
-        $balance = $data['grand_total'] - $data['paid_amount'];
+        $balance = ($data['grand_total'] - $data['order_discount'] - $data['shipping_cost']) - $data['paid_amount'];
+//        $balance = $data['grand_total'] - $data['paid_amount'];
         if ($balance < 0 || $balance > 0) {
             $data['payment_status'] = 1;
         } else {
@@ -776,11 +779,13 @@ class PurchaseController extends Controller
         }
         $lims_purchase_data = Purchase::find($id);
         $lims_product_purchase_data = ProductPurchase::where('purchase_id', $id)->get();
+        $lims_old_ship_data = Shipping::where('purchase_id', $id)->get();
 
         $data['created_at'] = date("Y-m-d", strtotime(str_replace("/", "-", $data['created_at'])));
         $product_id = $data['product_id'];
         $product_code = $data['product_code'];
         $lcno = $data['lc_no'];
+//        $shippingId = $data['oldShipId'];
         $qty = $data['qty'];
         $recieved = $data['recieved'];
 //        $batch_no = $data['batch_no'];
@@ -922,7 +927,7 @@ class PurchaseController extends Controller
             else {
                 $lims_product_warehouse_data = new Product_Warehouse();
                 $lims_product_warehouse_data->product_id = $pro_id;
-                $lims_product_warehouse_data->product_batch_id = $product_purchase['product_batch_id'];
+//                $lims_product_warehouse_data->product_batch_id = $product_purchase['product_batch_id'];
                 if($lims_product_data->is_variant)
                     $lims_product_warehouse_data->variant_id = $lims_product_variant_data->variant_id;
                 $lims_product_warehouse_data->warehouse_id = $data['warehouse_id'];
@@ -955,6 +960,29 @@ class PurchaseController extends Controller
             $product_purchase['total'] = $total[$key];
             $product_purchase['imei_number'] = $imei_number[$key];
             ProductPurchase::create($product_purchase);
+        }
+
+        foreach ($lims_old_ship_data as $shipId){
+            $shipId->delete();
+        }
+
+        //        SHIPPING DATA STORE
+        $data['user_id'] = Auth::id();
+        $data['reference_no'] = 'pr-' . date("Ymd") . '-'. date("his");
+        if (isset($data['shipping_agency'])) {
+            foreach ($data['shipping_agency'] as $key => $agency_name) {
+                $lims_product_shipping_data = new Shipping;
+                $lims_product_shipping_data->reference_no = $data['reference_no'];
+                $lims_product_shipping_data->user_id = $data['user_id'];
+                $lims_product_shipping_data->purchase_id = $id;
+                $lims_product_shipping_data->agency_id = $data['shipping_agency'][$key];
+                $lims_product_shipping_data->shipping_type = $data['shipping_type'][$key];
+                $lims_product_shipping_data->shipping_vehicle_no = $data['shipping_vehicle_no'][$key];
+                $lims_product_shipping_data->shipping_cost = $data['shipping_per_cost'][$key];
+                $lims_product_shipping_data->payment_status = 0;
+
+                $lims_product_shipping_data->save();
+            }
         }
 
         $lims_purchase_data->update($data);

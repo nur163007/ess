@@ -511,6 +511,7 @@ class TransferController extends Controller
             $lims_product_shipping_data->transfer_id = $lims_transfer_data->id;
             $lims_product_shipping_data->agency_id = $data['shipping_agency'][$key];
             $lims_product_shipping_data->shipping_type = $data['shipping_type'][$key];
+            $lims_product_shipping_data->shipping_vehicle_no = $data['shipping_vehicle_no'][$key];
             $lims_product_shipping_data->shipping_cost = $data['shipping_per_cost'][$key];
             $lims_product_shipping_data->payment_status = 0;
 
@@ -702,7 +703,8 @@ class TransferController extends Controller
             $lims_transfer_data = Transfer::find($id);
             $lims_product_transfer_data = ProductTransfer::where('transfer_id', $id)->get();
             $lims_lcno_list = Purchase::where('lc_no','!=', null)->get();
-            return view('backend.transfer.edit', compact('lims_warehouse_list', 'lims_transfer_data', 'lims_product_transfer_data','lims_agency_list','lims_lcno_list','lims_from_warehouse_list'));
+            $lims_shipping_data = Shipping::with('agency')->where('transfer_id',$id)->get();
+            return view('backend.transfer.edit', compact('lims_warehouse_list', 'lims_transfer_data', 'lims_product_transfer_data','lims_agency_list','lims_lcno_list','lims_from_warehouse_list','lims_shipping_data'));
         }
         else
             return redirect()->back()->with('not_permitted', 'Sorry! You are not allowed to access this module');
@@ -733,6 +735,8 @@ class TransferController extends Controller
 
         $lims_transfer_data = Transfer::find($id);
         $lims_product_transfer_data = ProductTransfer::where('transfer_id', $id)->get();
+        $lims_old_ship_data = Shipping::where('transfer_id', $id)->get();
+
         $product_id = $data['product_id'];
         $imei_number = $data['imei_number'];
 //        $product_batch_id = $data['product_batch_id'];
@@ -909,19 +913,11 @@ class TransferController extends Controller
                     ['lc_no', $lcno],
                     ['product_id', $pro_id]
                 ])->first();
-                if ($product_purchase->transfer_qty > $qty[$key]){
+
                     $product_purchase->transfer_qty =$qty[$key];
-                }
-                else{
-
-                }
-
-                $product_purchase->transfer_qty +=$qty[$key];
+                    $product_purchase->remaining = $product_purchase->recieved - $qty[$key];
 
                 $product_purchase->save();
-
-
-
 
             }
             elseif($data['status'] == 3) {
@@ -985,6 +981,31 @@ class TransferController extends Controller
             else
                 ProductTransfer::create($product_transfer);
         }
+
+        foreach ($lims_old_ship_data as $shipId){
+            $shipId->delete();
+        }
+
+        //        SHIPPING DATA STORE
+        $data['user_id'] = Auth::id();
+        $data['reference_no'] = 'pr-' . date("Ymd") . '-'. date("his");
+        if (isset($data['shipping_agency'])) {
+            foreach ($data['shipping_agency'] as $key => $agency_name) {
+                $lims_product_shipping_data = new Shipping;
+                $lims_product_shipping_data->reference_no = $data['reference_no'];
+                $lims_product_shipping_data->user_id = $data['user_id'];
+                $lims_product_shipping_data->transfer_id = $id;
+                $lims_product_shipping_data->agency_id = $data['shipping_agency'][$key];
+                $lims_product_shipping_data->shipping_type = $data['shipping_type'][$key];
+                $lims_product_shipping_data->shipping_vehicle_no = $data['shipping_vehicle_no'][$key];
+                $lims_product_shipping_data->shipping_cost = $data['shipping_per_cost'][$key];
+                $lims_product_shipping_data->payment_status = 0;
+
+                $lims_product_shipping_data->save();
+            }
+        }
+
+
 
         $lims_transfer_data->update($data);
         return redirect('transfers')->with('message', 'Transfer updated successfully');
