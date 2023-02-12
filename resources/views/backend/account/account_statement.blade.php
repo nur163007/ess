@@ -1,0 +1,193 @@
+@extends('backend.layout.main') @section('content')
+@if(session()->has('message'))
+  <div class="alert alert-success alert-dismissible text-center"><button type="button" class="close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">&times;</span></button>{!! session()->get('message') !!}</div>
+@endif
+<?php
+if($accountId == 0){
+    $accountName='All account';
+    $accountNo = 'N/A';
+}else{
+    $accountName= $lims_account_data->name;
+    $accountNo = $lims_account_data->account_no;
+}
+?>
+<section class="forms">
+    <div class="container-fluid">
+        <input type="hidden" name="hidden_accid" id="hiddenId" value="{{$accountId}}"/>
+        <h3>{{trans('file.Account Statement')}}</h3>
+        <strong>{{trans('file.Account')}}:</strong> {{$accountName}} [{{$accountNo}}]
+    </div>
+    <div class="table-responsive mb-4">
+        <table id="account-table" class="table table-hover">
+            <thead>
+                <tr>
+                    <th class="not-exported"></th>
+                    <th>{{trans('file.date')}}</th>
+{{--                    <th>{{trans('file.Reference No')}}</th>--}}
+                    <th>{{trans('file.Related Transaction')}}</th>
+                    <th>{{trans('file.Method')}}</th>
+                    <th>{{trans('file.Credit')}}</th>
+                    <th>{{trans('file.Debit')}}</th>
+                    <th>{{trans('file.Balance')}}</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach($all_transaction_list as $key => $data)
+                <?php
+                    $transaction = '';
+                    if($data->sale_id)
+                        $transaction = App\Sale::select('reference_no')->find($data->sale_id);
+                    elseif($data->purchase_id)
+                        $transaction = App\Purchase::select('reference_no')->find($data->purchase_id);
+                    if ($accountId == 0){
+                        if(str_contains($data->reference_no, 'spr') || str_contains($data->reference_no, 'prr') || str_contains($data->reference_no, 'mtr') ) {
+                            $balance += $data->amount;
+                            $credit = $data->amount;
+                            $debit = 0;
+                        }
+                        else {
+                            $balance -= $data->amount;
+                            $debit = $data->amount;
+                            $credit = 0;
+                        }
+                    }else{
+                    if(str_contains($data->reference_no, 'spr') || str_contains($data->reference_no, 'prr') || (str_contains($data->reference_no, 'mtr') && $data->to_account_id == $lims_account_data->id) ) {
+                        $balance += $data->amount;
+                        $credit = $data->amount;
+                        $debit = 0;
+                    }
+                    else {
+                        $balance -= $data->amount;
+                        $debit = $data->amount;
+                        $credit = 0;
+                    }
+                    }
+                ?>
+                <tr>
+                    <td>{{$key}}</td>
+                    <td>{{date($general_setting->date_format, strtotime($data->created_at->toDateString()))}}</td>
+{{--                    <td>{{$data->reference_no}}</td>--}}
+                    @if($transaction)
+                        <td>{{$transaction->reference_no}}</td>
+                    @elseif($data->ref_account)
+                        <td>{{$data->ref_account}}</td>
+                    @else
+                        <td>N/A</td>
+                    @endif
+                    @if($data->paying_method)
+                    <td>{{$data->paying_method.' ('.$data->account_name.')'}}</td>
+                    @elseif($data->ref_account)
+                    <td>{{$data->ref_account}}</td>
+                    @else
+                    <td>N/A</td>
+                    @endif
+                    <td>{{number_format((float)$credit, 2, '.', '')}}</td>
+                    <td>{{number_format((float)$debit, 2, '.', '')}}</td>
+                    <td>{{number_format((float)$balance, 2, '.', '')}}</td>
+                </tr>
+                @endforeach
+            </tbody>
+        </table>
+    </div>
+</section>
+
+@endsection
+@push('scripts')
+<script type="text/javascript">
+    $("ul#account").siblings('a').attr('aria-expanded','true');
+    $("ul#account").addClass("show");
+    $("ul#account #account-statement-menu").addClass("active");
+
+    var logoUrl = <?php echo json_encode(url('public/logo', $general_setting->site_logo)) ?>;
+    var accId = $("#hiddenId").val();
+    var name;
+    var account;
+    var account_name;
+
+    if (accId == 0){
+         name = 'All Account';
+         account = 'N/A';
+         account_name = name+'['+account+']';
+    }else{
+         name = <?php echo json_encode($accountName)?>;
+         account = <?php echo json_encode($accountNo)?>;
+         account_name = name+'['+account+']';
+    }
+
+    var table = $('#account-table').DataTable( {
+        "order": [],
+        'language': {
+            'lengthMenu': '_MENU_ {{trans("file.records per page")}}',
+             "info":      '<small>{{trans("file.Showing")}} _START_ - _END_ (_TOTAL_)</small>',
+            "search":  '{{trans("file.Search")}}',
+            'paginate': {
+                    'previous': '<i class="dripicons-chevron-left"></i>',
+                    'next': '<i class="dripicons-chevron-right"></i>'
+            }
+        },
+        'columnDefs': [
+            {
+                "orderable": false,
+                'targets': 0
+            },
+            {
+                'render': function(data, type, row, meta){
+                    if(type === 'display'){
+                        data = '<div class="checkbox"><input type="checkbox" class="dt-checkboxes"><label></label></div>';
+                    }
+
+                   return data;
+                },
+                'checkboxes': {
+                   'selectRow': true,
+                   'selectAllRender': '<div class="checkbox"><input type="checkbox" class="dt-checkboxes"><label></label></div>'
+                },
+                'targets': [0]
+            }
+        ],
+        'select': { style: 'multi',  selector: 'td:first-child'},
+        'lengthMenu': [[10, 25, 50, -1], [10, 25, 50, "All"]],
+        dom: '<"row"lfB>rtip',
+        buttons: [
+            {
+                extend: 'pdf',
+                text: '<i title="export to pdf" class="fa fa-file-pdf-o"></i>',
+                exportOptions: {
+                    columns: ':visible:Not(.not-exported)',
+                    rows: ':visible'
+                }
+            },
+            {
+                extend: 'csv',
+                text: '<i title="export to csv" class="fa fa-file-text-o"></i>',
+                exportOptions: {
+                    columns: ':visible:Not(.not-exported)',
+                    rows: ':visible'
+                }
+            },
+            {
+                extend: 'print',
+                title: '',
+                text: '<i title="print" class="fa fa-print"></i>',
+                exportOptions: {
+                    columns: ':visible:not(.not-exported)',
+                    rows: ':visible',
+                    stripHtml: false
+                },
+                repeatingHead: {
+                    logo: logoUrl,
+                    logoPosition: 'center',
+                    logoStyle: '',
+                    title: '<h1 class="text-left"><b>Account statement</b></h1>' +
+                        '<h3 class="text-left"> Account name: '+account_name+'</h3><hr>'
+                },
+            },
+            {
+                extend: 'colvis',
+                text: '<i title="column visibility" class="fa fa-eye"></i>',
+                columns: ':gt(0)'
+            },
+        ],
+    } );
+</script>
+@endpush

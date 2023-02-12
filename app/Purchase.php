@@ -1,0 +1,28 @@
+<?php
+
+namespace App;
+
+use Illuminate\Database\Eloquent\Model;
+
+class Purchase extends Model
+{
+    protected $fillable =[
+
+        "reference_no", "user_id", "warehouse_id","lc_no", "supplier_id", "item", "total_qty", "total_discount", "total_tax", "total_cost", "order_tax_rate", "order_tax", "order_discount", "shipping_cost", "grand_total","paid_amount", "status", "payment_status", "document", "note", "created_at"
+    ];
+
+    public function supplier()
+    {
+    	return $this->belongsTo('App\Supplier');
+    }
+
+    public function warehouse()
+    {
+    	return $this->belongsTo('App\Warehouse','warehouse_id','id');
+    }
+
+    public function shipping()
+    {
+        return $this->hasMany('App\Shipping','purchase_id','id');
+    }
+}
